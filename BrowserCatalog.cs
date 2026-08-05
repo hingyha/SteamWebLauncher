@@ -1,0 +1,58 @@
+namespace SteamWebLauncher;
+
+internal enum BrowserType
+{
+    Edge,
+    Chrome,
+    Brave,
+    Opera,
+    Vivaldi,
+}
+
+/// <summary>
+/// Static metadata about each supported browser: what its process is
+/// called, what its exe file is called, and where it typically installs.
+/// This is the single place to touch when adding a new browser — nothing
+/// in BrowserLauncher, BrowserResolver, or WindowFinder needs to change.
+/// </summary>
+internal sealed record BrowserDefinition(
+    BrowserType Type,
+    string ProcessName,
+    string ExeFileName,
+    // Subpaths are tried under ProgramFiles, ProgramFilesX86, and
+    // LocalApplicationData in that order (most Chromium browsers other
+    // than Edge/Chrome install per-user under LocalAppData by default).
+    string[] InstallSubPath);
+
+internal static class BrowserCatalog
+{
+    public static readonly IReadOnlyDictionary<BrowserType, BrowserDefinition> Definitions =
+        new Dictionary<BrowserType, BrowserDefinition>
+        {
+            [BrowserType.Edge] = new(
+                BrowserType.Edge, "msedge", "msedge.exe",
+                new[] { "Microsoft", "Edge", "Application" }),
+
+            [BrowserType.Chrome] = new(
+                BrowserType.Chrome, "chrome", "chrome.exe",
+                new[] { "Google", "Chrome", "Application" }),
+
+            [BrowserType.Brave] = new(
+                BrowserType.Brave, "brave", "brave.exe",
+                new[] { "BraveSoftware", "Brave-Browser", "Application" }),
+
+            [BrowserType.Opera] = new(
+                BrowserType.Opera, "opera", "opera.exe",
+                new[] { "Opera" }),
+
+            [BrowserType.Vivaldi] = new(
+                BrowserType.Vivaldi, "vivaldi", "vivaldi.exe",
+                new[] { "Vivaldi", "Application" }),
+        };
+
+    public static bool TryParse(string value, out BrowserType type) =>
+        Enum.TryParse(value, ignoreCase: true, out type) && Definitions.ContainsKey(type);
+
+    public static string SupportedNamesForHelp() =>
+        string.Join(", ", Definitions.Keys.Select(k => k.ToString().ToLowerInvariant()));
+}

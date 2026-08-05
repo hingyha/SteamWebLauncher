@@ -1,0 +1,20 @@
+# Build output
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Rider / JetBrains
+.idea/
+
+# VS Code
+.vscode/
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+*.lnk

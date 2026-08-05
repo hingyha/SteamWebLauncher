@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>false</UseWindowsForms>
+    <AssemblyName>SteamWebLauncher</AssemblyName>
+    <RootNamespace>SteamWebLauncher</RootNamespace>
+    <!-- Console app so Steam sees a normal process, but we don't actually
+         need a visible console window once this is finished — see README
+         note about switching OutputType to WinExe for a silent launcher. -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Registry access (Microsoft.Win32.Registry) isn't guaranteed to be
+         in the net8.0-windows shared framework depending on SDK version —
+         this package reference makes sure it resolves regardless. -->
+    <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
+  </ItemGroup>
+
+</Project>
