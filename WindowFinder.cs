@@ -4,43 +4,28 @@ namespace SteamWebLauncher;
 
 internal static class WindowFinder
 {
-    // Chromium browser exe names we know how to recognize. Kept as a
-    // flat set (rather than pulled from BrowserCatalog) since we want to
-    // recognize *any* supported browser's window here, regardless of
-    // which one was actually launched — a stray window from a different
-    // already-running Chromium browser should still be correctly ignored
-    // by the pre-launch snapshot diff, but if it somehow shows up new,
-    // treating it as a candidate and letting scoring sort it out is safer
-    // than silently missing the real match.
-    private static readonly HashSet<string> ChromiumProcessNames = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "msedge",
-        "chrome",
-        "brave",
-        "opera",
-        "vivaldi",
-    };
-
     /// <summary>
     /// Polls until at least one new top-level HWND appears that matches
     /// the baseline filters (not in the pre-launch snapshot, visible,
-    /// true top-level window, non-empty title, belongs to a known
-    /// Chromium process). If multiple candidates show up around the same
-    /// time — an update dialog, a "restore session?" prompt, a
-    /// notification toast, alongside the real app window — scores them
-    /// and returns the best match instead of just the first one seen.
-    /// Returns IntPtr.Zero on timeout.
+    /// true top-level window, non-empty title, belongs to the process
+    /// name of the browser that was actually launched). If multiple
+    /// candidates show up around the same time — an update dialog, a
+    /// "restore session?" prompt, a notification toast, alongside the
+    /// real app window — scores them and returns the best match instead
+    /// of just the first one seen. Returns IntPtr.Zero on timeout.
     /// </summary>
     public static IntPtr FindNewBrowserWindow(
         HashSet<IntPtr> preLaunchSnapshot,
+        BrowserType launchedBrowser,
         TimeSpan timeout,
         TimeSpan pollInterval)
     {
+        string expectedProcessName = BrowserCatalog.Definitions[launchedBrowser].ProcessName;
         var deadline = DateTime.UtcNow + timeout;
 
         while (DateTime.UtcNow < deadline)
         {
-            var candidates = CollectCandidates(preLaunchSnapshot);
+            var candidates = CollectCandidates(preLaunchSnapshot, expectedProcessName);
 
             if (candidates.Count > 0)
             {
@@ -52,7 +37,7 @@ internal static class WindowFinder
                 // full picture instead of racing whichever HWND enumerated
                 // first.
                 Thread.Sleep(300);
-                candidates = CollectCandidates(preLaunchSnapshot);
+                candidates = CollectCandidates(preLaunchSnapshot, expectedProcessName);
 
                 IntPtr best = PickBest(candidates);
                 Logger.Debug($"Selected HWND 0x{best:X} as the app window (title: \"{NativeMethods.GetWindowTitle(best)}\").");
@@ -65,7 +50,7 @@ internal static class WindowFinder
         return IntPtr.Zero;
     }
 
-    private static List<IntPtr> CollectCandidates(HashSet<IntPtr> preLaunchSnapshot)
+    private static List<IntPtr> CollectCandidates(HashSet<IntPtr> preLaunchSnapshot, string expectedProcessName)
     {
         var candidates = new List<IntPtr>();
 
@@ -78,7 +63,7 @@ internal static class WindowFinder
             if (NativeMethods.GetAncestor(hWnd, NativeMethods.GA_ROOT) != hWnd) return true;
 
             if (string.IsNullOrWhiteSpace(NativeMethods.GetWindowTitle(hWnd))) return true;
-            if (!BelongsToChromium(hWnd)) return true;
+            if (!BelongsToProcess(hWnd, expectedProcessName)) return true;
 
             candidates.Add(hWnd);
             return true; // keep enumerating so we catch every candidate, not just the first
@@ -101,13 +86,14 @@ internal static class WindowFinder
     }
 
     /// <summary>
-    /// Heuristic score used only to break ties when multiple new Chromium
-    /// windows appear at once. Two signals: is it the foreground window
-    /// (a real app window that just launched almost always is; a
-    /// background update-check dialog usually isn't), and how large is it
-    /// (the real --kiosk/--app window is fullscreen or large; dialogs and
-    /// toasts are small). Not meant to be bulletproof — just meaningfully
-    /// better than "first HWND EnumWindows happens to report".
+    /// Heuristic score used only to break ties when multiple new windows
+    /// from the same browser appear at once. Two signals: is it the
+    /// foreground window (a real app window that just launched almost
+    /// always is; a background update-check dialog usually isn't), and
+    /// how large is it (the real kiosk window is fullscreen or large;
+    /// dialogs and toasts are small). Not meant to be bulletproof — just
+    /// meaningfully better than "first HWND EnumWindows happens to
+    /// report".
     /// </summary>
     private static int Score(IntPtr hWnd, IntPtr foreground)
     {
@@ -132,7 +118,7 @@ internal static class WindowFinder
         return score;
     }
 
-    private static bool BelongsToChromium(IntPtr hWnd)
+    private static bool BelongsToProcess(IntPtr hWnd, string expectedProcessName)
     {
         try
         {
@@ -140,7 +126,7 @@ internal static class WindowFinder
             if (pid == 0) return false;
 
             using var process = Process.GetProcessById((int)pid);
-            return ChromiumProcessNames.Contains(process.ProcessName);
+            return string.Equals(process.ProcessName, expectedProcessName, StringComparison.OrdinalIgnoreCase);
         }
         catch (ArgumentException)
         {

@@ -23,7 +23,7 @@ internal static class BrowserLauncher
         string profileDir = GetKioskProfileDirectory(type);
         Directory.CreateDirectory(profileDir);
 
-        List<string> arguments = BuildArguments(type, url, profileDir);
+        List<string> arguments = BuildArguments(definition, url, profileDir);
         Logger.Debug($"Launching: \"{exePath}\" {string.Join(' ', arguments)}");
 
         var startInfo = new ProcessStartInfo
@@ -49,18 +49,27 @@ internal static class BrowserLauncher
         return process;
     }
 
-    private static List<string> BuildArguments(BrowserType type, string url, string profileDir)
+    private static List<string> BuildArguments(BrowserDefinition definition, string url, string profileDir)
+    {
+        // Both engines are single-instance by default: launching the exe
+        // again while one is already running just forwards the URL to the
+        // existing window as a new tab, and the new process exits
+        // immediately, silently dropping kiosk mode in the process.
+        // Pointing at a dedicated profile dir forces a genuinely separate
+        // instance so kiosk mode actually takes effect, and as a bonus
+        // keeps the kiosk session's profile separate from normal browsing.
+        return definition.Engine switch
+        {
+            BrowserEngine.Chromium => BuildChromiumArguments(definition, url, profileDir),
+            BrowserEngine.Gecko => BuildGeckoArguments(url, profileDir),
+            _ => throw new NotSupportedException($"Unhandled browser engine: {definition.Engine}"),
+        };
+    }
+
+    private static List<string> BuildChromiumArguments(BrowserDefinition definition, string url, string profileDir)
     {
         var args = new List<string>
         {
-            // Chromium browsers are single-instance by default: launching
-            // the exe again while one is already running just forwards the
-            // URL to the existing window as a new tab and the new process
-            // exits immediately, silently dropping --kiosk in the process.
-            // Pointing at a dedicated profile dir forces a genuinely
-            // separate instance so --kiosk actually takes effect, and as a
-            // bonus keeps the kiosk session's profile separate from your
-            // normal browsing profile.
             $"--user-data-dir={profileDir}",
             "--kiosk",
             url,
@@ -69,12 +78,27 @@ internal static class BrowserLauncher
         // Edge specifically needs --edge-kiosk-type=fullscreen alongside
         // --kiosk, otherwise it can default kiosk mode to a locked-down
         // "public browsing" variant instead of plain fullscreen.
-        if (type == BrowserType.Edge)
+        if (definition.Type == BrowserType.Edge)
         {
             args.Add("--edge-kiosk-type=fullscreen");
         }
 
         return args;
+    }
+
+    private static List<string> BuildGeckoArguments(string url, string profileDir)
+    {
+        // Firefox uses single-dash flags and a different single-instance
+        // mechanism than Chromium: -no-remote stops it from forwarding to
+        // an already-running instance, and -profile points it at our
+        // dedicated (auto-created on first run) kiosk profile dir.
+        return new List<string>
+        {
+            "-no-remote",
+            "-profile", profileDir,
+            "-kiosk",
+            url,
+        };
     }
 
     private static string GetKioskProfileDirectory(BrowserType type)

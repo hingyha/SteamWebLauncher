@@ -37,7 +37,7 @@ internal static class Program
             //    Chromium process and wasn't in the snapshot.
             Logger.Debug("Searching for the new browser window...");
             IntPtr browserWindow = WindowFinder.FindNewBrowserWindow(
-                preLaunchSnapshot, WindowFindTimeout, FindPollInterval);
+                preLaunchSnapshot, browser, WindowFindTimeout, FindPollInterval);
 
             if (browserWindow == IntPtr.Zero)
             {
