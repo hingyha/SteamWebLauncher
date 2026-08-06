@@ -34,6 +34,7 @@ at it.
    fullscreen, and closing the browser (Alt+F4, or Steam's own **Exit
    Game** from the Big Picture overlay) returns you straight to Steam,
    exactly like closing a game.
+9. If you want pre made controls for your controller search "SteamWebLauncher" in the steam input template section :)
 
 That's it. Everything below this point is for people who want to look at
 or modify the source code.
